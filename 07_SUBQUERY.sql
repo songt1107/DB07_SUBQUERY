@@ -349,35 +349,82 @@ WHERE DEPT_CODE IN (SELECT DEPT_ID
 -- 사원의 이름, 직급, 부서, 입사일을 조회        
 
 -- 1) 퇴사한 여직원 조회
-
-
+SELECT DEPT_CODE, JOB_CODE
+FROM EMPLOYEE
+WHERE ENT_YN = 'Y'
+AND SUBSTR(EMP_NO, 8, 1) = '2'; -- 이태림, D8, J6
+										
+										
 -- 2) 퇴사한 여직원과 같은 부서, 같은 직급 (다중 열 서브쿼리)
-
+								
 -- 단일행 서브쿼리 2개를 사용해서 조회
 --> 서브쿼리가 같은 테이블, 같은 조건, 다른 컬럼 조회
-
-
+SELECT EMP_NAME, JOB_CODE, DEPT_CODE, HIRE_DATE
+FROM EMPLOYEE
+WHERE DEPT_CODE = (SELECT DEPT_CODE
+					FROM EMPLOYEE
+					WHERE ENT_YN = 'Y'
+					AND SUBSTR(EMP_NO, 8, 1) = '2')
+AND JOB_CODE = (SELECT JOB_CODE
+					FROM EMPLOYEE
+					WHERE ENT_YN = 'Y'
+					AND SUBSTR(EMP_NO, 8, 1) = '2');
 
 			
 -- 다중열 서브쿼리
 --> WHERE절에 작성된 컬럼 순서에 맞게
 --	서브쿼리의 조회된 컬럼과 비교하여 일치하는 행만 조회
 --  (컬럼 순서가 중요!)
-
+SELECT EMP_NAME, JOB_CODE, DEPT_CODE, HIRE_DATE
+FROM EMPLOYEE
+WHERE (DEPT_CODE, JOB_CODE) = (SELECT DEPT_CODE, JOB_CODE
+					FROM EMPLOYEE
+					WHERE ENT_YN = 'Y'
+					AND SUBSTR(EMP_NO, 8, 1) = '2');
+				
+				
 
 -------------------------- 연습문제 -------------------------------
 -- 1. 노옹철 사원과 같은 부서, 같은 직급인 사원을 조회하시오. (단, 노옹철 사원은 제외)
 --    사번, 이름, 부서코드, 직급코드, 부서명, 직급명
-
+SELECT EMP_ID, EMP_NAME, DEPT_CODE, JOB_CODE, DEPT_TITLE, JOB_NAME
+FROM EMPLOYEE
+JOIN JOB USING (JOB_CODE)
+LEFT JOIN DEPARTMENT ON (DEPT_CODE = DEPT_ID)
+WHERE EMP_NAME != '노옹철'
+AND (DEPT_TITLE, JOB_NAME) = (SELECT DEPT_TITLE, JOB_NAME
+								FROM EMPLOYEE
+								JOIN JOB USING (JOB_CODE)
+								LEFT JOIN DEPARTMENT ON (DEPT_CODE = DEPT_ID)
+								WHERE EMP_NAME = '노옹철');
+				
 
 -- 2. 2000년도에 입사한 사원의 부서와 직급이 같은 사원을 조회하시오
 --    사번, 이름, 부서코드, 직급코드, 고용일
-
+SELECT EMP_ID, EMP_NAME, DEPT_CODE, JOB_CODE, HIRE_DATE
+FROM EMPLOYEE
+JOIN JOB USING (JOB_CODE)
+LEFT JOIN DEPARTMENT ON (DEPT_CODE = DEPT_ID)
+WHERE (DEPT_TITLE, JOB_NAME) = (SELECT DEPT_TITLE, JOB_NAME
+									FROM EMPLOYEE
+									JOIN JOB USING (JOB_CODE)
+									LEFT JOIN DEPARTMENT ON (DEPT_CODE = DEPT_ID)
+									WHERE EXTRACT(YEAR FROM HIRE_DATE) = 2000);
+				
 
 -- 3. 77년생 여자 사원과 동일한 부서이면서 동일한 사수를 가지고 있는 사원을 조회하시오
 --    사번, 이름, 부서코드, 사수번호, 주민번호, 고용일                    
+SELECT EMP_ID, EMP_NAME, DEPT_CODE, MANAGER_ID, EMP_NO, HIRE_DATE
+FROM EMPLOYEE
+LEFT JOIN DEPARTMENT ON (DEPT_CODE = DEPT_ID)
+WHERE (DEPT_TITLE, MANAGER_ID) = (SELECT DEPT_TITLE, MANAGER_ID
+									FROM EMPLOYEE
+									LEFT JOIN DEPARTMENT ON (DEPT_CODE = DEPT_ID)
+									WHERE SUBSTR(EMP_NO, 1, 2) = '77' 
+									AND SUBSTR(EMP_NO, 8, 1) = '2');
 
-
+				
+				
 ----------------------------------------------------------------------
 
 -- 4. 다중행 다중열 서브쿼리
@@ -388,13 +435,30 @@ WHERE DEPT_CODE IN (SELECT DEPT_ID
 -- 단, 급여와 급여 평균은 만원단위로 계산하세요 TRUNC(컬럼명, -4)    
 
 -- 1) 급여를 200, 600만 받는 직원 (200만, 600만이 평균급여라 생각 할 경우)
-
+SELECT EMP_ID, EMP_NAME, JOB_NAME, SALARY
+FROM EMPLOYEE
+JOIN JOB USING(JOB_CODE)
+WHERE SALARY IN (2000000, 6000000);
+								
 
 -- 2) 직급별 평균 급여
-
-
+SELECT JOB_NAME, TRUNC(AVG(SALARY), -4)
+FROM EMPLOYEE
+JOIN JOB USING(JOB_CODE)
+GROUP BY JOB_NAME;
+								
+						
 -- 3) 본인 직급의 평균 급여를 받고 있는 직원
+SELECT EMP_ID, EMP_NAME, JOB_NAME, SALARY
+FROM EMPLOYEE
+JOIN JOB USING(JOB_CODE)
+WHERE (JOB_NAME, SALARY) IN (SELECT JOB_NAME, TRUNC(AVG(SALARY), -4)
+								FROM EMPLOYEE
+								JOIN JOB USING(JOB_CODE)
+								GROUP BY JOB_NAME);
 
+
+							
 -------------------------------------------------------------------------------
 
 -- 5. 상[호연]관 서브쿼리
