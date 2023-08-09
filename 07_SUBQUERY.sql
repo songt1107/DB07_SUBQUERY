@@ -507,14 +507,14 @@ J6	2624373
 --    단, 퇴사한 직원은 제외하고 조회하세요
 SELECT EMP_ID, EMP_NAME, DEPT_CODE, NVL(DEPT_TITLE, '소속없음'), JOB_NAME, HIRE_DATE
 FROM EMPLOYEE MAIN
-JOIN JOB USING(JOB_CODE)
 LEFT JOIN DEPARTMENT ON(DEPT_CODE = DEPT_ID)
-WHERE ENT_YN = 'N' -- MAIN 쿼리
-AND HIRE_DATE = (SELECT MIN(HIRE_DATE) /*2*/ -- SUB 쿼리
-				 FROM EMPLOYEE SUB
-				 WHERE SUB.DEPT_CODE = MAIN.DEPT_CODE)
+JOIN JOB USING(JOB_CODE) -- MAIN 쿼리
+WHERE HIRE_DATE IN (SELECT MIN(HIRE_DATE) /*2*/ -- SUB 쿼리
+				 FROM EMPLOYEE
+				 WHERE ENT_YN = 'N'
+				 GROUP BY DEPT_CODE)
 				 						  /*1*/
-ORDER BY HIRE_DATE;
+ORDER BY HIRE_DATE; 
 
 -- 1) MAIN의 1행의 DEPT_CODE를 SUB에 대입
 -- 2) SUB를 수행
@@ -551,6 +551,7 @@ NVL((SELECT EMP_NAME FROM EMPLOYEE SUB
  	WHERE SUB.EMP_ID = MAIN.MANAGER_ID), '없음') 관리자명
 FROM EMPLOYEE MAIN;
 
+
 -----------------------------------------------------------------------
 
 
@@ -558,14 +559,49 @@ FROM EMPLOYEE MAIN;
 --    FROM 절에서 서브쿼리를 사용하는 경우로
 --    서브쿼리가 만든 결과의 집합(RESULT SET)을 테이블 대신에 사용한다.
 
+SELECT *
+FROM (
+SELECT EMP_NAME 이름, DEPT_TITLE 부서
+		FROM EMPLOYEE
+		JOIN DEPARTMENT ON (DEPT_CODE = DEPT_ID)
+		)
+WHERE 부서 = '기술지원부';
+
 
 -- 인라인뷰를 활용한 TOP-N분석
 -- 전 직원 중 급여가 높은 상위 5명의
 -- 순위, 이름, 급여 조회
+SELECT ROWNUM, EMP_NAME, SALARY
+FROM EMPLOYEE;
+--WHERE ROWNUM <= 5
+ORDER BY SALARY DESC;
 
+-- ROWNUM 컬럼 : 행번호를 나타내는 가상 컬럼
+-- SELECT, WHERE, ORDER BY 사용 가능
+
+--> 인라인뷰를 이용해서 해결 가능!
+
+-- 1) 이름, 급여를 급여 내림차순으로 조회한 결과를 인라인뷰로 사용
+--> FROM 절에 작성되기 때문에 해석순위 1순위
+
+-- 2) 메인쿼리 조회 시 ROWNUM을 5 이하까지만 조회
+
+SELECT ROWNUM, EMP_NAME, SALARY
+FROM (SELECT EMP_NAME, SALARY
+		FROM EMPLOYEE
+		ORDER BY SALARY DESC)
+WHERE ROWNUM <= 5;
 
 
 -- 급여 평균이 3위 안에 드는 부서의 부서코드와 부서명, 평균급여를 조회
+SELECT DEPT_CODE, DEPT_TITLE, 평균급여
+FROM (SELECT DEPT_CODE, DEPT_TITLE, CEIL( AVG(SALARY) ) 평균급여
+		FROM EMPLOYEE
+		LEFT JOIN DEPARTMENT ON(DEPT_CODE = DEPT_ID)
+		GROUP BY DEPT_CODE, DEPT_TITLE
+		ORDER BY 평균급여 DESC)
+WHERE ROWNUM <= 3;
+
 
 ------------------------------------------------------------------------
 
@@ -577,6 +613,12 @@ FROM EMPLOYEE MAIN;
 -- 
 -- 전 직원의 급여 순위 
 -- 순위, 이름, 급여 조회
+WITH TOP_SAL AS ( SELECT EMP_NAME, SALARY
+					FROM EMPLOYEE
+					ORDER BY SALARY DESC)
+SELECT ROWNUM, EMP_NAME, SALARY
+FROM TOP_SAL
+WHERE ROWNUM <= 10;
 
 
 --------------------------------------------------------------------------
@@ -590,13 +632,123 @@ FROM EMPLOYEE MAIN;
 -- 사원별 급여 순위
 -- 1) ROWNUM
 
+SELECT ROWNUM, EMP_NAME, SALARY
+FROM (SELECT EMP_NAME, SALARY
+		FROM EMPLOYEE
+		ORDER BY SALARY DESC);
+
+
 -- 2) RANK() OVER(정렬순서)
 
+SELECT RANK() OVER(ORDER BY SALARY DESC) 순위, EMP_NAME, SALARY
+FROM EMPLOYEE;
+
+--19 전형돈 2000000
+--19 윤은해 2000000
+--21 박나라 1800000
+	
+	
 -- DENSE_RANK() OVER : 동일한 순위 이후의 등수를 이후의 순위로 계산
 --                     EX) 공동 1위가 2명이어도 다음 순위는 2위
 
+SELECT DENSE_RANK() OVER(ORDER BY SALARY DESC) 순위, EMP_NAME, SALARY
+FROM EMPLOYEE;
 
 
 
+--------------------------------------------------------------------------
 
+-- 실습문제
+-- 1. 전지연 사원이 속해있는 부서원들을 조회하시오 (단, 전지연은 제외)
+-- 사번, 사원명, 전화번호, 고용일, 부서명
+
+SELECT EMP_ID, EMP_NAME, PHONE, HIRE_DATE, DEPT_TITLE
+FROM EMPLOYEE
+LEFT JOIN DEPARTMENT ON (DEPT_CODE = DEPT_ID)
+WHERE EMP_NAME != '전지연'
+AND DEPT_CODE = (SELECT DEPT_CODE
+					FROM EMPLOYEE
+					WHERE EMP_NAME = '전지연');
+				
+
+-- 2. 고용일이 2000년도 이후인 사원들 중 급여가 가장 높은 사원의
+-- 사번, 사원명, 전화번호, 급여, 직급명을 조회하시오.
+
+SELECT EMP_ID, EMP_NAME, PHONE, SALARY, JOB_NAME
+FROM EMPLOYEE
+JOIN JOB USING(JOB_CODE)
+WHERE HIRE_DATE > '2000-01-01'
+AND SALARY >= ALL (SELECT SALARY
+					FROM EMPLOYEE
+					WHERE HIRE_DATE > '2000-01-01');
+				
+				
+-- 3. 노옹철 사원과 같은 부서, 같은 직급인 사원을 조회하시오.(단, 노옹철 사원은 제외)
+-- 사번, 이름, 부서코드, 직급코드, 부서명, 직급명
+				
+SELECT EMP_ID, EMP_NAME, DEPT_CODE, JOB_CODE, DEPT_TITLE, JOB_NAME
+FROM EMPLOYEE
+JOIN JOB USING(JOB_CODE)
+LEFT JOIN DEPARTMENT ON (DEPT_CODE = DEPT_ID)
+WHERE EMP_NAME != '노옹철'
+AND (DEPT_CODE, JOB_CODE) = (SELECT DEPT_CODE, JOB_CODE
+								FROM EMPLOYEE
+								WHERE EMP_NAME = '노옹철');
+							
+							
+-- 4. 2000년도에 입사한 사원과 부서와 직급이 같은 사원을 조회하시오
+-- 사번, 이름, 부서코드, 직급코드, 고용일
+
+SELECT EMP_ID, EMP_NAME, DEPT_CODE, JOB_CODE, HIRE_DATE
+FROM EMPLOYEE
+JOIN JOB USING(JOB_CODE)
+LEFT JOIN DEPARTMENT ON (DEPT_CODE = DEPT_ID)
+WHERE (DEPT_CODE, JOB_CODE) = (SELECT DEPT_CODE, JOB_CODE
+								FROM EMPLOYEE
+								WHERE EXTRACT(YEAR FROM HIRE_DATE) = 2000);
+							
+
+-- 5. 77년생 여자 사원과 동일한 부서이면서 동일한 사수를 가지고 있는 사원을 조회하시오
+-- 사번, 이름, 부서코드, 사수번호, 주민번호, 고용일
+
+SELECT EMP_ID, EMP_NAME, DEPT_CODE, MANAGER_ID, EMP_NO, HIRE_DATE
+FROM EMPLOYEE
+LEFT JOIN DEPARTMENT ON (DEPT_CODE = DEPT_ID)
+WHERE (DEPT_CODE, MANAGER_ID) = (SELECT DEPT_CODE, MANAGER_ID
+									FROM EMPLOYEE
+									LEFT JOIN DEPARTMENT ON (DEPT_CODE = DEPT_ID)
+									WHERE SUBSTR(EMP_NO, 8, 1) = '2'
+									AND SUBSTR(EMP_NO, 1, 2) = '77');
+								
+								
+-- 6. 부서별 입사일이 가장 빠른 사원의
+-- 사번, 이름, 부서명(NULL이면 '소속없음'), 직급명, 입사일을 조회하고
+-- 입사일이 빠른 순으로 조회하시오
+-- 단, 퇴사한 직원은 제외하고 조회
+
+SELECT EMP_ID, EMP_NAME, DEPT_CODE, NVL(DEPT_TITLE, '소속없음'), JOB_NAME, HIRE_DATE
+FROM EMPLOYEE
+LEFT JOIN DEPARTMENT ON(DEPT_CODE = DEPT_ID)
+JOIN JOB USING(JOB_CODE) -- MAIN 쿼리
+WHERE HIRE_DATE IN (SELECT MIN(HIRE_DATE) /*2*/ -- SUB 쿼리
+				 FROM EMPLOYEE
+				 WHERE ENT_YN = 'N'
+				 GROUP BY DEPT_CODE)
+				 						  /*1*/
+ORDER BY HIRE_DATE; 							
+								
+								
+-- 7. 직급별 나이가 가장 어린 직원의
+-- 사번, 이름, 직급명, 나이, 보너스 포함 연봉을 조회하고
+-- 나이순으로 내림차순 정렬하세요
+-- 단 연봉은 \124,800,000 으로 출력되게 하세요. (\ : 원 단위 기호)								
+?								
+SELECT EMP_ID, EMP_NAME, JOB_NAME, EMP_NO, 12 * (SALARY * (1 + BONUS) ) 
+FROM EMPLOYEE
+JOIN JOB USING(JOB_CODE)
+WHERE EMP_NO = (SELECT MAX(EMP_NO)
+				FROM EMPLOYEE
+				GROUP BY JOB_CODE);
+
+								
 
