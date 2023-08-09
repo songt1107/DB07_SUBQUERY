@@ -529,18 +529,27 @@ ORDER BY HIRE_DATE;
 --> SELECT절에 작성되는 단일행 서브쿼리
 
 -- 모든 직원의 이름, 직급, 급여, 전체 사원 중 가장 높은 급여와의 차
+SELECT EMP_NAME, JOB_CODE, SALARY, (SELECT MAX(SALARY) FROM EMPLOYEE) - SALARY
+FROM EMPLOYEE;
 
 
 -- 각 직원들이 속한 직급의 급여 평균 조회
 -- (스칼라 + 상관 쿼리)
+SELECT EMP_NAME, JOB_CODE, SALARY, 
+(SELECT CEIL(AVG(SALARY)) 
+FROM EMPLOYEE SUB
+WHERE SUB.JOB_CODE = MAIN.JOB_CODE)
+FROM EMPLOYEE MAIN;
 
 
 -- 모든 사원의 사번, 이름, 관리자사번, 관리자명을 조회
 -- 단 관리자가 없는 경우 '없음'으로 표시
 -- (스칼라 + 상관 쿼리)
 
-
-
+SELECT EMP_ID, EMP_NAME, MANAGER_ID, 
+NVL((SELECT EMP_NAME FROM EMPLOYEE SUB
+ 	WHERE SUB.EMP_ID = MAIN.MANAGER_ID), '없음') 관리자명
+FROM EMPLOYEE MAIN;
 
 -----------------------------------------------------------------------
 
